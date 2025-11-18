@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 FardaPack Mini-CRM — Backend API (FastAPI + SQLite)
-این فایل کامل بک‌اند است که اصلاح شده تا در حالت لوکال ارور ندهد.
+نسخه نهایی بدون pandas و کاملاً قابل اجرا روی Render
 """
 
 # ====================== 1. وارد کردن کتابخانه‌ها ======================
@@ -9,16 +9,15 @@ import sqlite3
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Tuple, Dict, Any
 
-import pandas as pd
+# ❌ pandas حذف شده (این خط واردات هم حذف شد)
 import hashlib
 import uuid
 import os, io, zipfile, shutil
 
-# 👇 کتابخانه‌های جدید برای API
+# 👇 کتابخانه‌های FastAPI
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Body, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-# 💡 [اصلاح] StaticFiles و HTMLResponse اضافه شدند
 from fastapi.responses import FileResponse, JSONResponse, Response, HTMLResponse 
 from fastapi.staticfiles import StaticFiles 
 from pydantic import BaseModel, Field
@@ -31,17 +30,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# --- CORS (بسیار مهم) ---
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # برای تست (بعداً آدرس Vue را جایگزین کنید)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # اجازه همه متدها (GET, POST, PUT, DELETE)
-    allow_headers=["*"],  # اجازه همه هدرها (از جمله Authorization)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ✅ سرو فایل‌های استاتیک (Front-End Vue.js)
-# نکته: در حالت لوکال اگر پوشه static نباشد خطا می‌داد، با try-except جلوی خطا را می‌گیریم
+# ✅ سرو فایل‌های استاتیک
 try:
     if os.path.exists("static"):
         app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -187,36 +185,6 @@ def dt_to_jalali_str(dt_iso_or_none: Optional[str]) -> str:
         jdt = JalaliDateTime.fromgregorian(datetime=gdt)
         return jdt.strftime("%Y/%m/%d %H:%M")
     except Exception: return dt_iso_or_none
-
-def plain_date_to_jalali_str(maybe_date: str) -> str:
-    if not maybe_date: return ""
-    try:
-        d = datetime.strptime(str(maybe_date).strip(), "%Y-%m-%d").date()
-        return date_to_jalali_str(d)
-    except Exception: return str(maybe_date)
-
-def format_gregorian_with_weekday(dt_str: str) -> str:
-    if not dt_str: return ""
-    try:
-        if "T" in dt_str: dt = datetime.fromisoformat(dt_str)
-        else:
-            try: dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                try: dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
-                except ValueError: dt = datetime.strptime(dt_str, "%Y-%m-%d")
-        weekdays = {0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه", 5: "شنبه", 6: "یکشنبه"}
-        weekday = weekdays[dt.weekday()]
-        return f"{dt.strftime('%Y-%m-%d')} ({weekday})"
-    except Exception: return dt_str
-
-def format_date_only_with_weekday(date_str: str) -> str:
-    if not date_str: return ""
-    try:
-        dt = datetime.strptime(str(date_str).strip(), "%Y-%m-%d")
-        weekdays = {0: "دوشنبه", 1: "سه‌شنبه", 2: "چهارشنبه", 3: "پنجشنبه", 4: "جمعه", 5: "شنبه", 6: "یکشنبه"}
-        weekday = weekdays[dt.weekday()]
-        return f"{dt.strftime('%Y-%m-%d')} ({weekday})"
-    except Exception: return date_str
 
 # ====================== 5. دیتابیس و CRUD ======================
 DB_PATH = "crm.db"
@@ -500,26 +468,26 @@ def update_followup_status(task_id: int, new_status: str):
 def create_call(call_data: CallCreate, creator_id: int):
     conn = get_conn()
     conn.execute("INSERT INTO calls (user_id, call_datetime, status, description, created_by) VALUES (?,?,?,?,?);",
-                 (
-                     call_data.user_id,
-                     call_data.call_datetime.isoformat(),
-                     call_data.status,
-                     (call_data.description or "").strip(),
-                     creator_id
-                 ))
+                (
+                    call_data.user_id,
+                    call_data.call_datetime.isoformat(),
+                    call_data.status,
+                    (call_data.description or "").strip(),
+                    creator_id
+                ))
     conn.commit(); conn.close()
 
 def create_followup(fu_data: FollowupCreate, creator_id: int):
     conn = get_conn()
     conn.execute("INSERT INTO followups (user_id, title, details, due_date, status, created_by) VALUES (?,?,?,?,?,?);",
-                 (
-                     fu_data.user_id,
-                     (fu_data.title or "").strip(),
-                     (fu_data.details or "").strip(),
-                     fu_data.due_date.isoformat(),
-                     fu_data.status,
-                     creator_id
-                 ))
+                (
+                    fu_data.user_id,
+                    (fu_data.title or "").strip(),
+                    (fu_data.details or "").strip(),
+                    fu_data.due_date.isoformat(),
+                    fu_data.status,
+                    creator_id
+                ))
     conn.commit(); conn.close()
 
 def bulk_update_users_owner(user_ids: List[int], new_owner_id: Optional[int], current_user: UserAuthInfo) -> int:
@@ -620,7 +588,7 @@ def update_order(order_id: int, order_data: OrderCreate):
     conn.commit(); conn.close(); return True, "ذخیره شد."
 
 
-# --- توابع DataFrame ---
+# --- توابع گزارش‌گیری (بدون pandas) ---
 def df_companies_advanced(q_name, f_status, f_level, created_from, created_to,
                           has_open_task, owner_ids_filter: Optional[List[int]], enforce_owner: Optional[int]):
     conn = get_conn(); params, where = [], []
@@ -628,7 +596,7 @@ def df_companies_advanced(q_name, f_status, f_level, created_from, created_to,
     if f_status: where.append("c.status IN (" + ",".join(["?"]*len(f_status)) + ")"); params += f_status
     if f_level: where.append("c.level IN (" + ",".join(["?"]*len(f_level)) + ")"); params += f_level
     if created_from: where.append("date(c.created_at) >= ?"); params.append(created_from.isoformat())
-    if created_to:   where.append("date(c.created_at) <= ?"); params.append(created_to.isoformat())
+    if created_to:    where.append("date(c.created_at) <= ?"); params.append(created_to.isoformat())
     if enforce_owner:
         where.append("EXISTS (SELECT 1 FROM users u WHERE u.company_id=c.id AND u.owner_id=?)")
         params.append(enforce_owner)
@@ -638,13 +606,14 @@ def df_companies_advanced(q_name, f_status, f_level, created_from, created_to,
         params += owner_ids_filter
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
     
-    df = pd.read_sql_query(f"""
+    # جایگزین ساده بدون pandas
+    query = f"""
       SELECT
         c.id AS ID, c.name AS نام_شرکت, COALESCE(c.phone,'') AS تلفن,
         COALESCE(c.status,'') AS وضعیت_شرکت, COALESCE(c.level,'') AS سطح_شرکت,
         c.created_at AS تاریخ_ایجاد,
         EXISTS(SELECT 1 FROM users u JOIN followups f ON f.user_id=u.id 
-               WHERE u.company_id=c.id AND f.status='در حال انجام') AS پیگیری_باز_دارد,
+              WHERE u.company_id=c.id AND f.status='در حال انجام') AS پیگیری_باز_دارد,
         (
           SELECT GROUP_CONCAT(username, '، ')
           FROM (
@@ -654,14 +623,19 @@ def df_companies_advanced(q_name, f_status, f_level, created_from, created_to,
           ) AS d
         ) AS کارشناس_فروش
       FROM companies c {where_sql} ORDER BY c.created_at DESC, c.id DESC
-    """, conn, params=params)
-
-    if has_open_task is not None:
-        df = df[df["پیگیری_باز_دارد"] == (1 if has_open_task else 0)]
+    """
     
-    df["پیگیری_باز_دارد"] = df.apply(lambda row: "دارد" if int(row.get("پیگیری_باز_دارد", 0)) == 1 else "ندارد", axis=1)
+    cur = conn.execute(query, params)
+    columns = [description[0] for description in cur.description]
+    results = []
+    for row in cur.fetchall():
+        row_dict = dict(zip(columns, row))
+        # تبدیل پیگیری_باز_دارد به متن فارسی
+        row_dict["پیگیری_باز_دارد"] = "دارد" if row_dict.get("پیگیری_باز_دارد") == 1 else "ندارد"
+        results.append(row_dict)
     
-    conn.close(); return df.to_dict('records')
+    conn.close()
+    return results
 
 def df_users_advanced(first_q, last_q, phone_q, role_q, domain_q, created_from, created_to,
                       has_open_task, last_call_from, last_call_to,
@@ -673,7 +647,7 @@ def df_users_advanced(first_q, last_q, phone_q, role_q, domain_q, created_from, 
     if role_q:  where.append("u.role LIKE ?"); params.append(f"%{role_q.strip()}%")
     if domain_q: where.append("u.domain LIKE ?"); params.append(f"%{domain_q.strip()}%")
     if created_from: where.append("date(u.created_at) >= ?"); params.append(created_from.isoformat())
-    if created_to:   where.append("date(u.created_at) <= ?"); params.append(created_to.isoformat())
+    if created_to:    where.append("date(u.created_at) <= ?"); params.append(created_to.isoformat())
     if statuses: where.append("u.status IN (" + ",".join(["?"]*len(statuses)) + ")"); params += statuses
     if levels: where.append("u.level IN (" + ",".join(["?"]*len(levels)) + ")"); params += levels
 
@@ -683,7 +657,7 @@ def df_users_advanced(first_q, last_q, phone_q, role_q, domain_q, created_from, 
         where.append("u.owner_id IN (" + ",".join(["?"]*len(owner_ids_filter)) + ")"); params += owner_ids_filter
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
-    df = pd.read_sql_query(f"""
+    query = f"""
       SELECT
         u.id AS ID, u.first_name AS نام, u.last_name AS نام_خانوادگی, u.full_name AS نام_کامل,
         COALESCE(c.name,'') AS شرکت, COALESCE(u.phone,'') AS تلفن,
@@ -701,23 +675,47 @@ def df_users_advanced(first_q, last_q, phone_q, role_q, domain_q, created_from, 
       LEFT JOIN companies c ON c.id=u.company_id
       LEFT JOIN app_users au ON au.id=u.owner_id
       {where_sql} ORDER BY u.created_at DESC, u.id DESC
-    """, conn, params=params)
-
-    if has_open_task is not None:
-        df = df[df["پیگیری_باز_دارد"] == (1 if has_open_task else 0)]
-    if last_call_from:
-        df = df[(df["آخرین_تماس"].notna()) & (pd.to_datetime(df["آخرین_تماس"]).dt.date >= last_call_from)]
-    if last_call_to:
-        df = df[(df["آخرین_تماس"].notna()) & (pd.to_datetime(df["آخرین_تماس"]).dt.date <= last_call_to)]
-
-    def _open_followup_display(row):
-        if int(row.get("پیگیری_باز_دارد", 0)) == 0 or pd.isna(row.get("آخرین_پیگیری_باز")):
-            return "ندارد"
-        return row.get("آخرین_پیگیری_باز") 
+    """
     
-    df["وضعیت_پیگیری_باز"] = df.apply(_open_followup_display, axis=1)
+    cur = conn.execute(query, params)
+    columns = [description[0] for description in cur.description]
+    results = []
+    for row in cur.fetchall():
+        row_dict = dict(zip(columns, row))
+        
+        # فیلتر کردن بر اساس has_open_task
+        if has_open_task is not None:
+            has_open = row_dict.get("پیگیری_باز_دارد") == 1
+            if has_open_task != has_open:
+                continue
+        
+        # فیلتر کردن بر اساس تاریخ آخرین تماس
+        if last_call_from and row_dict.get("آخرین_تماس"):
+            try:
+                last_call_date = datetime.fromisoformat(row_dict["آخرین_تماس"]).date()
+                if last_call_date < last_call_from:
+                    continue
+            except:
+                pass
+                
+        if last_call_to and row_dict.get("آخرین_تماس"):
+            try:
+                last_call_date = datetime.fromisoformat(row_dict["آخرین_تماس"]).date()
+                if last_call_date > last_call_to:
+                    continue
+            except:
+                pass
+        
+        # تبدیل وضعیت پیگیری به متن فارسی
+        if row_dict.get("پیگیری_باز_دارد") == 0 or not row_dict.get("آخرین_پیگیری_باز"):
+            row_dict["وضعیت_پیگیری_باز"] = "ندارد"
+        else:
+            row_dict["وضعیت_پیگیری_باز"] = row_dict.get("آخرین_پیگیری_باز", "")
+            
+        results.append(row_dict)
     
-    conn.close(); return df.to_dict('records')
+    conn.close()
+    return results
 
 def df_calls_by_filters(name_query, statuses, start, end,
                           owner_ids_filter: Optional[List[int]], enforce_owner: Optional[int]):
@@ -726,24 +724,29 @@ def df_calls_by_filters(name_query, statuses, start, end,
         where.append("(u.full_name LIKE ? OR c.name LIKE ?)"); q=f"%{name_query.strip()}%"; params += [q,q]
     if statuses: where.append("cl.status IN (" + ",".join(["?"]*len(statuses)) + ")"); params += statuses
     if start: where.append("date(cl.call_datetime) >= ?"); params.append(start.isoformat())
-    if end:   where.append("date(cl.call_datetime) <= ?"); params.append(end.isoformat())
+    if end:    where.append("date(cl.call_datetime) <= ?"); params.append(end.isoformat())
     if enforce_owner: where.append("u.owner_id=?"); params.append(enforce_owner)
     if owner_ids_filter: where.append("u.owner_id IN (" + ",".join(["?"]*len(owner_ids_filter)) + ")"); params += owner_ids_filter
     
-    df = pd.read_sql_query(f"""
+    query = f"""
         SELECT cl.id AS ID, u.full_name AS نام_کاربر, COALESCE(c.name,'') AS شرکت,
-               cl.call_datetime AS تاریخ_و_زمان, cl.status AS وضعیت, 
-               COALESCE(cl.description,'') AS توضیحات, u.id AS ID_کاربر,
-               COALESCE(au.username,'') AS کارشناس_فروش
+                cl.call_datetime AS تاریخ_و_زمان, cl.status AS وضعیت, 
+                COALESCE(cl.description,'') AS توضیحات, u.id AS ID_کاربر,
+                COALESCE(au.username,'') AS کارشناس_فروش
         FROM calls cl
         JOIN users u ON u.id=cl.user_id
         LEFT JOIN companies c ON c.id=u.company_id
         LEFT JOIN app_users au ON au.id=u.owner_id
         WHERE {' AND '.join(where)}
         ORDER BY cl.call_datetime DESC, cl.id DESC
-    """, conn, params=params)
+    """
     
-    conn.close(); return df.to_dict('records')
+    cur = conn.execute(query, params)
+    columns = [description[0] for description in cur.description]
+    results = [dict(zip(columns, row)) for row in cur.fetchall()]
+    
+    conn.close()
+    return results
 
 def df_followups_by_filters(name_query, statuses, start, end,
                             owner_ids_filter: Optional[List[int]], enforce_owner: Optional[int]):
@@ -752,24 +755,29 @@ def df_followups_by_filters(name_query, statuses, start, end,
         where.append("(u.full_name LIKE ? OR c.name LIKE ?)"); q=f"%{name_query.strip()}%"; params += [q,q]
     if statuses: where.append("f.status IN (" + ",".join(["?"]*len(statuses)) + ")"); params += statuses
     if start: where.append("date(f.due_date) >= ?"); params.append(start.isoformat())
-    if end:   where.append("date(f.due_date) <= ?"); params.append(end.isoformat())
+    if end:    where.append("date(f.due_date) <= ?"); params.append(end.isoformat())
     if enforce_owner: where.append("u.owner_id=?"); params.append(enforce_owner)
     if owner_ids_filter: where.append("u.owner_id IN (" + ",".join(["?"]*len(owner_ids_filter)) + ")"); params += owner_ids_filter
     
-    df = pd.read_sql_query(f"""
+    query = f"""
         SELECT f.id AS ID, u.full_name AS نام_کاربر, COALESCE(c.name,'') AS شرکت,
-               f.title AS عنوان, COALESCE(f.details,'') AS جزئیات,
-               f.due_date AS تاریخ_پیگیری, f.status AS وضعیت, u.id AS ID_کاربر,
-               COALESCE(au.username,'') AS کارشناس_فروش
+                f.title AS عنوان, COALESCE(f.details,'') AS جزئیات,
+                f.due_date AS تاریخ_پیگیری, f.status AS وضعیت, u.id AS ID_کاربر,
+                COALESCE(au.username,'') AS کارشناس_فروش
         FROM followups f
         JOIN users u ON u.id=f.user_id
         LEFT JOIN companies c ON c.id=u.company_id
         LEFT JOIN app_users au ON au.id=u.owner_id
         WHERE {' AND '.join(where)}
         ORDER BY f.due_date DESC, f.id DESC
-    """, conn, params=params)
+    """
+    
+    cur = conn.execute(query, params)
+    columns = [description[0] for description in cur.description]
+    results = [dict(zip(columns, row)) for row in cur.fetchall()]
         
-    conn.close(); return df.to_dict('records')
+    conn.close()
+    return results
 
 def df_orders_by_filters(user_filter: Optional[int] = None, company_filter: Optional[int] = None,
                           product_filter: Optional[int] = None, status_filter: Optional[str] = None):
@@ -781,7 +789,7 @@ def df_orders_by_filters(user_filter: Optional[int] = None, company_filter: Opti
         where.append("o.status = ?"); params.append(status_filter)
     where_sql = "WHERE " + " AND ".join(where)
 
-    df = pd.read_sql_query(f"""
+    query = f"""
         SELECT 
             o.id AS ID, COALESCE(u.full_name, '—') AS کاربر,
             COALESCE(c.name, '—') AS شرکت, p.name AS محصول, p.category AS دسته_بندی,
@@ -792,12 +800,23 @@ def df_orders_by_filters(user_filter: Optional[int] = None, company_filter: Opti
         LEFT JOIN companies c ON c.id = o.company_id
         LEFT JOIN products p ON p.id = o.product_id
         {where_sql} ORDER BY o.created_at DESC;
-    """, conn, params=params)
-        
-    if "مبلغ_کل" in df.columns:
-        df["مبلغ_کل"] = df["مبلغ_کل"].apply(lambda x: f"{float(x):,.0f}" if pd.notna(x) else "")
+    """
+    
+    cur = conn.execute(query, params)
+    columns = [description[0] for description in cur.description]
+    results = []
+    for row in cur.fetchall():
+        row_dict = dict(zip(columns, row))
+        # فرمت کردن مبلغ
+        if "مبلغ_کل" in row_dict and row_dict["مبلغ_کل"]:
+            try:
+                row_dict["مبلغ_کل"] = f"{float(row_dict['مبلغ_کل']):,.0f}"
+            except:
+                pass
+        results.append(row_dict)
+    
     conn.close()
-    return df.to_dict('records')
+    return results
 
 # --- توابع بکاپ ---
 def extract_db_from_zip(zip_bytes: bytes) -> Optional[bytes]:
@@ -846,6 +865,7 @@ def get_current_auth_user(creds: HTTPAuthorizationCredentials = Depends(token_au
         )
     return user_info
 
+# ✅ تابع get_admin_user اضافه شد
 def get_admin_user(current_user: UserAuthInfo = Depends(get_current_auth_user)):
     if current_user.role != "admin":
         raise HTTPException(
@@ -868,13 +888,6 @@ async def startup_event():
 @app.get("/api", tags=["General"])
 def get_root():
     return {"message": "FardaPack CRM API در حال اجرا است."}
-
-# ✅ [تغییر مهم] غیرفعال کردن مسیر Catch-All برای جلوگیری از خطای Missing File
-# این قسمت در حالت لوکال نیازی نیست چون Vue جداگانه اجرا می‌شود.
-# @app.get("/{full_path:path}", response_class=HTMLResponse, include_in_schema=False)
-# async def serve_vue_app(full_path: str):
-#    return FileResponse(os.path.join("static", "index.html"), media_type="text/html")
-
 
 @app.get("/api/dashboard-stats", tags=["General"])
 async def get_dashboard_stats(current_user: UserAuthInfo = Depends(get_current_auth_user)):
@@ -951,7 +964,7 @@ async def login_for_access_token(data: LoginRequest):
 
 @app.post("/api/logout", response_model=MessageResponse, tags=["Auth"])
 async def logout(current_user: UserAuthInfo = Depends(get_current_auth_user),
-                 creds: HTTPAuthorizationCredentials = Depends(token_auth_scheme)):
+                  creds: HTTPAuthorizationCredentials = Depends(token_auth_scheme)):
     delete_session(creds.credentials)
     return {"message": "خروج با موفقیت انجام شد"}
 
@@ -1012,28 +1025,12 @@ async def update_existing_user(user_id: int, user_data: UserUpdate, current_user
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
 
+# ❌ توابع import/export اکسل غیرفعال شدند
 @app.get("/api/users/import-template", tags=["Users"])
 async def download_excel_template(current_user: UserAuthInfo = Depends(get_admin_user)):
-    tpl_data = [{
-        "FirstName": "علی", "LastName": "محمدی", "Phone": "09121234567",
-        "Role": "مدیر خرید", "Company": "شرکت نمونه", "Status": "در حال پیگیری",
-        "Level": "نقره‌ای", "Domain": "صنعتی", "Province": "تهران",
-        "OwnerUsername": "admin", "Note": "توضیحات نمونه"
-    }]
-    tpl_df = pd.DataFrame(tpl_data)
-    output = io.BytesIO()
-    try:
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            tpl_df.to_excel(writer, sheet_name='template', index=False)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"خطا در ساخت فایل اکسل: {e}")
-
-    headers = {'Content-Disposition': 'attachment; filename="contacts_template.xlsx"'}
-    
-    return Response(
-        content=output.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers=headers
+    raise HTTPException(
+        status_code=501, 
+        detail="امکان دانلود قالب اکسل در حال حاضر وجود ندارد. لطفاً از طریق رابط کاربری اقدام کنید."
     )
 
 @app.post("/api/users/import-excel", response_model=Dict[str, Any], tags=["Users"])
@@ -1041,84 +1038,18 @@ async def import_users_from_excel(
     file: UploadFile = File(...), 
     current_user: UserAuthInfo = Depends(get_admin_user)
 ):
-    if not file.filename.endswith('.xlsx'):
-        raise HTTPException(status_code=400, detail="فایل باید با فرمت .xlsx باشد")
-    contents = await file.read()
-    try:
-        df_imp = pd.read_excel(io.BytesIO(contents), engine='openpyxl')
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"خطا در خواندن فایل اکسل: {e}")
-
-    cols = {str(c).strip().lower(): str(c).strip() for c in df_imp.columns}
-    def get_col_name(key): return cols.get(key.lower())
-
-    required_cols = ["FirstName", "Phone"]
-    if not all(get_col_name(x) is not None for x in required_cols):
-        raise HTTPException(status_code=400, detail=f"فایل اکسل باید شامل ستون‌های الزامی باشد: {', '.join(required_cols)}")
-
-    ok_cnt, skip_cnt = 0, 0
-    msgs: List[str] = []
-    
-    for idx, row in df_imp.iterrows():
-        def getv(key):
-            cc = get_col_name(key)
-            if cc is None: return ""
-            v = row.get(cc)
-            return "" if (pd.isna(v) or v is None) else str(v).strip()
-
-        first_name = getv("FirstName")
-        last_name  = getv("LastName")
-        phone      = getv("Phone")
-        
-        if not first_name or not phone:
-            skip_cnt += 1
-            msgs.append(f"ردیف {idx+2}: نام و تلفن اجباری هستند.")
-            continue
-
-        job_role   = getv("Role")
-        company_n  = getv("Company")
-        status_v   = getv("Status")
-        level_v    = getv("Level")
-        domain_v   = getv("Domain")
-        province_v = getv("Province")
-        owner_u    = getv("OwnerUsername")
-        note_v     = getv("Note")
-
-        status_v = status_v if status_v in USER_STATUSES else "بدون وضعیت"
-        level_v  = level_v  if level_v  in LEVELS        else "هیچکدام"
-
-        company_id = get_or_create_company(company_n, current_user.id) if company_n else None
-        owner_id   = get_app_user_id_by_username(owner_u) if owner_u else None
-
-        user_data = UserCreate(
-            first_name=first_name, last_name=last_name, phone=phone,
-            role=job_role, company_id=company_id, note=note_v,
-            status=status_v, domain=domain_v, province=province_v,
-            level=level_v, owner_id=owner_id
-        )
-        
-        full_name = f"{first_name} {last_name}".strip()
-
-        ok, msg = create_user(user_data, current_user.id)
-        
-        if ok:
-            ok_cnt += 1
-        else:
-            skip_cnt += 1
-            msgs.append(f"ردیف {idx+2} ({full_name}): {msg}")
-
-    return {
-        "message": f"ایمپورت پایان یافت. ✅ موفق: {ok_cnt} | ❌ ناموفق: {skip_cnt}",
-        "errors": msgs
-    }
+    raise HTTPException(
+        status_code=501, 
+        detail="امکان ایمپورت از اکسل در حال حاضر وجود ندارد. لطفاً کاربران را به صورت دستی اضافه کنید."
+    )
 
 @app.get("/api/users/{user_id}/profile", tags=["Users"])
 async def get_user_profile(user_id: int, current_user: UserAuthInfo = Depends(get_current_auth_user)):
     conn = get_conn()
     u = conn.execute("""
         SELECT u.id, u.first_name, u.last_name, u.full_name, c.name AS company_name, u.phone,
-               u.role, u.status, u.level, u.domain, u.province,
-               u.note, u.created_at, u.company_id, au.username AS sales_user
+                u.role, u.status, u.level, u.domain, u.province,
+                u.note, u.created_at, u.company_id, au.username AS sales_user
         FROM users u
         LEFT JOIN companies c ON c.id=u.company_id
         LEFT JOIN app_users au ON au.id=u.owner_id
@@ -1134,7 +1065,7 @@ async def get_user_profile(user_id: int, current_user: UserAuthInfo = Depends(ge
     colleagues = []
     if u["company_id"]:
         colleagues = conn.execute("SELECT id, full_name, phone, role FROM users WHERE company_id=? AND id<>?", 
-                                  (u["company_id"], user_id)).fetchall()
+                                 (u["company_id"], user_id)).fetchall()
     conn.close()
     
     return {
@@ -1143,7 +1074,6 @@ async def get_user_profile(user_id: int, current_user: UserAuthInfo = Depends(ge
         "followups": [dict(f) for f in followups],
         "colleagues": [dict(c) for c in colleagues]
     }
-
 
 # --- اندپوینت‌های Companies ---
 @app.get("/api/companies", response_model=List[Dict], tags=["Companies"])
@@ -1260,12 +1190,12 @@ async def get_products(current_user: UserAuthInfo = Depends(get_current_auth_use
     return list_products()
 
 @app.post("/api/products", response_model=MessageResponse, status_code=status.HTTP_201_CREATED, tags=["Products"])
-async def create_new_product(prod_data: ProductCreate, current_user: UserAuthInfo = Depends(get_admin_user)): # فقط ادمین
+async def create_new_product(prod_data: ProductCreate, current_user: UserAuthInfo = Depends(get_admin_user)):
     create_product(prod_data)
     return {"message": "محصول اضافه شد"}
 
 @app.put("/api/products/{product_id}", response_model=MessageResponse, tags=["Products"])
-async def update_existing_product(product_id: int, prod_data: ProductCreate, current_user: UserAuthInfo = Depends(get_admin_user)): # فقط ادمین
+async def update_existing_product(product_id: int, prod_data: ProductCreate, current_user: UserAuthInfo = Depends(get_admin_user)):
     update_product(product_id, prod_data)
     return {"message": "محصول به‌روزرسانی شد"}
 
@@ -1292,7 +1222,6 @@ async def update_existing_order(order_id: int, order_data: OrderCreate, current_
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
-
 
 # --- اندپوینت‌های Admin ---
 @app.get("/api/admin/app-users", response_model=List[Dict], tags=["Admin"])
@@ -1382,7 +1311,27 @@ async def restore_database(file: UploadFile = File(...), current_user: UserAuthI
 
     return {"message": "بازیابی با موفقیت انجام شد. سرور را ری‌استارت کنید."}
 
-# ====================== 8. اجرای سرور (برای تست محلی) ======================
+# ====================== 8. سرویس‌دهی فرانت‌اند (Vue.js / dist) ======================
+# این بخش باید پس از تعریف تمام اندپوینت‌های API قرار گیرد.
+
+# 1. Mount کردن پوشه 'dist' در روت اصلی ('/') برای سرو کردن دارایی‌های استاتیک (CSS, JS)
+# 'html=True' تضمین می‌کند که index.html برای روت '/' سرو شود.
+app.mount(
+    "/",  
+    StaticFiles(directory="dist", html=True), 
+    name="frontend_static"
+)
+
+# 2. روت Catch-all برای مدیریت SPA History Mode
+# اگر روت مورد نظر در API یا StaticFiles یافت نشد (مثل /users یا /settings)، 
+# آن را به فایل index.html هدایت می‌کند.
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend_fallback(full_path: str):
+    # مسیر فایل index.html که در پوشه dist قرار دارد.
+    return FileResponse(os.path.join("dist", "index.html"))
+
+
+# ====================== 9. اجرای سرور ======================
 if __name__ == "__main__":
     import uvicorn
     print("--- سرور FastAPI در حال اجرا روی http://127.0.0.1:8000 ---")
